@@ -73,13 +73,53 @@ pinning the action alone would leave the image floating on `:latest`.
   recognisable shape. Detection is a backstop; the real control is not
   having secrets in code — vaults and short-lived credentials. Phase 3's
   keyless signing via OIDC is the first step toward that.
-- **GitHub's own secret scanning and push protection are not yet enabled.**
-  The repository was briefly private while this control was built, which put
-  them out of reach. It is public again, so both are now available free.
-  Push protection in particular closes the one gap this control cannot:
-  TruffleHog in CI fires only AFTER a push, by which point a secret pushed
-  to a public repository is already exposed. Push protection rejects the
-  push itself. Not enabled yet - see open items.
+- **The CI gate cannot prevent, only detect.** Closed separately by enabling
+  GitHub push protection - see below.
+
+## Addition: GitHub push protection
+
+Enabled the same day, alongside the CI gate. Settings -> Advanced Security ->
+Secret Protection, then Push protection.
+
+**Why, on top of TruffleHog.** The CI gate fires only AFTER a push. On a
+public repository a credential is exposed the moment it lands, so a red build
+is a notification, not a defence. Push protection rejects the `git push`
+itself, server side, so the secret never reaches GitHub.
+
+**Verified by testing, which the CI gate could not be.** Push protection
+matches on shape, not liveness, so a fake key is enough to test it. Committed
+a randomly generated AWS key pair on a throwaway branch and pushed:
+
+    remote: error: GH013: Repository rule violations found
+    remote:   - Push cannot contain secrets
+    remote:     -- Amazon AWS Access Key ID
+    remote:     -- Amazon AWS Secret Access Key
+    ! [remote rejected] test/push-protection (push declined)
+
+Rejected. Nothing reached GitHub, so cleanup was deleting a local branch -
+compare with the history rewrite needed to remove node_modules earlier the
+same day. Prevention is cheap, cleanup is expensive.
+
+Note: GitHub flagged the access key ID and the secret access key as two
+separate findings. TruffleHog reports nothing unless it sees the pair. Neither
+is wrong; they are different thresholds, which is the argument for layering
+rather than picking one scanner.
+
+**What it does not cover.**
+
+- Only GitHub's registered partner patterns. Narrower than TruffleHog.
+  Custom or internal secret formats need the paid tier.
+- Human-chosen passwords - the universal blind spot.
+- Only pushes to GitHub. The same commit pushed to another remote is unaffected.
+- **It is bypassable.** The rejection includes an unblock URL. Anyone with
+  write access can declare it a false positive and push anyway. It raises an
+  alert rather than stopping them - a speed bump with an audit trail, not a
+  wall. Restricting who may bypass is a paid feature and is not in place.
+
+**Also on, unconditionally:** because the repository is public, GitHub always
+forwards detected secrets to the issuing provider, who can revoke them. That
+is the only part of this system that fixes a leak rather than reporting it,
+and it is not something that had to be turned on.
 
 ## Measurements
 
@@ -104,6 +144,7 @@ the TruffleHog image is the obvious lever, not weakening the gate.
   `trufflehog:ignore`, which has no owner, reason or expiry — that
   contradicts the time-boxed exception model in the governance layer.
   Phase 4 should reconcile these.
-- Enable GitHub push protection (Settings -> Advanced Security). It is the
-  only control here that prevents rather than detects, and it is free on a
-  public repository. Deserves its own ADR.
+- Dependabot alerts were switched on the same day, without a decision record.
+  It is report-only so nothing blocks, but it is an undocumented control that
+  will start producing findings against the deliberately outdated `express`
+  and `lodash`. Fold it into the SCA session and write it up properly.
