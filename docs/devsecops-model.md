@@ -201,7 +201,7 @@ A deliberately small application — a containerised API with a database and a f
 
 | Component | Suggested choice | Why |
 | --- | --- | --- |
-| SCM and CI | GitHub + Actions | Matches what Metso uses; free for public repos |
+| SCM and CI | GitHub + Actions | free for public repos |
 | Registry | GitHub Container Registry | Integrated, no extra setup |
 | Runtime | k3s or kind on a local VM | Lightweight Kubernetes |
 | Cloud target | A small AWS or GCP project | Matches what you already run |
@@ -249,7 +249,7 @@ The expired-exception check is a small thing that demonstrates you understand go
 
 ### Phase 6 — AI guardrails (optional, high value)
 
-Given the Metso role explicitly covers this:
+Given the DevSecOps role explicitly covers this:
 
 - A written policy on which models may be used and what may be sent to them
 - A GitHub Actions workflow where an AI review step runs with a scoped token and its output is treated as advisory, never auto-merged
