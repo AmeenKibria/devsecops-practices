@@ -5,24 +5,86 @@ on:
     branches: [main]
 
 jobs:
+  # Secret scanning runs as its own job so nothing is built, tagged or pushed
+  # until the gate passes. A separate job makes that dependency explicit.
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 fetches the FULL history. Required, not optional:
+      # the TruffleHog action scans the commit RANGE of the push
+      # (github.event.before -> github.event.after), and the "before" commit
+      # does not exist in GitHub's default shallow clone. Without this the
+      # action has nothing to compare against and reports green regardless.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # BLOCKING STEP — the gate.
+      #
+      # Pinned to a commit SHA, not @main. A third-party action runs arbitrary
+      # code in this pipeline; @main means whatever its maintainers pushed most
+      # recently. The SHA below is release v3.97.5. Re-pin deliberately.
+      #
+      # `version` pins the trufflehog CONTAINER IMAGE the action pulls.
+      # Pinning the action alone would still leave the image floating on :latest.
+      #
+      # --results=verified: only credentials TruffleHog confirmed are LIVE, by
+      # calling the provider's API. Near-zero false positives, safe to block on.
+      # The action supplies --fail itself, so a finding fails this job.
+      #
+      # Decision: secrets block everywhere, every tier (see ADR 0002).
+      # Known limitation: verification needs outbound internet from the runner.
+      # With no egress every result becomes `unknown` and this gate never fires.
+      - name: TruffleHog — block on verified (live) secrets
+        uses: trufflesecurity/trufflehog@f714bf454f350590f4a24c3ddb1aef02c35bf5b6 # v3.97.5
+        with:
+          version: "3.97.5"
+          extra_args: --results=verified
+
+      # REPORT-ONLY STEP.
+      #
+      # unverified = looks like a secret, not confirmed live.
+      # unknown    = verification errored (network failure, provider down).
+      #
+      # The action always passes --fail, so this step DOES exit non-zero on a
+      # finding. continue-on-error absorbs that: the finding stays visible in
+      # the log and on the step, but the job still succeeds and the build runs.
+      #
+      # Decision: blocking on unverified would fail builds on test fixtures and
+      # rotated keys, which is how gates end up switched off. Revisit once the
+      # false-positive rate is known (ADR 0002).
+      - name: TruffleHog — report unverified and unknown findings
+        continue-on-error: true
+        uses: trufflesecurity/trufflehog@f714bf454f350590f4a24c3ddb1aef02c35bf5b6 # v3.97.5
+        with:
+          version: "3.97.5"
+          extra_args: --results=unverified,unknown
+
   build:
+    # The gate. build does not start unless secret-scan succeeded, so a live
+    # credential in the repo means no image is ever produced or pushed.
+    needs: secret-scan
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      packages: write
+      contents: read   # read the source
+      packages: write  # push the image to ghcr.io
     steps:
+      # Fetch the source to build from. Shallow is fine here - the build only
+      # needs the current tree, not history.
       - uses: actions/checkout@v4
 
+      # Authenticate to GitHub Container Registry with the short-lived token
+      # GitHub mints per run. No long-lived registry password is stored.
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Build and push, tagged with the commit SHA so every image is traceable
+      # back to the exact source it was built from.
       - uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: ghcr.io/ameenkibria/devsecops-practice:${{ github.sha }}
-
-          
