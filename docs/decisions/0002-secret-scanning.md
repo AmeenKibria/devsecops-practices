@@ -81,12 +81,17 @@ pinning the action alone would leave the image floating on `:latest`.
 
 - Before this control (builds #1-#7): 28, 30, 32, 32, 36, 39, 39 seconds.
   Mean ~34s. ADR 0001 quoted ~30s from the first three runs.
-- After this control (build #8): 47 seconds.
-- Cost of the control: roughly **13 seconds**, about 38% on a ~34s pipeline.
+- After this control (builds #8, #9): 47 and 50 seconds. Mean ~48s.
+- Cost of the control: roughly **14 seconds**, about 43% on a ~34s pipeline.
 
-Caveat: build #8 is a single sample, and the first run also pulls the
-TruffleHog image cold. One data point is not a measurement. Re-check the
-figure after a few more runs before quoting it as the Phase 5 comparison.
+Build #8 was suspected of being inflated by a cold TruffleHog image pull.
+Build #9 was slower, not faster, so that is ruled out: the image is pulled
+fresh on every run and there is no warm-up benefit to wait for. The cost is
+real and steady.
+
+Still only two samples. Worth re-checking over more runs before this number
+is quoted as the Phase 5 comparison. If the 14s becomes a problem, caching
+the TruffleHog image is the obvious lever, not weakening the gate.
 
 ## Open items
 
