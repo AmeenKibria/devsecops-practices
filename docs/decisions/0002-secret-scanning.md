@@ -1,7 +1,7 @@
 # 0002 — Phase 2, control 1: secret scanning
 
 Date: 2026-09-20
-Repo: AmeenKibria/devsecops-practices (private)
+Repo: AmeenKibria/devsecops-practices (public)
 Supersedes nothing. Builds on 0001.
 
 ## What was added
@@ -73,9 +73,13 @@ pinning the action alone would leave the image floating on `:latest`.
   recognisable shape. Detection is a backstop; the real control is not
   having secrets in code — vaults and short-lived credentials. Phase 3's
   keyless signing via OIDC is the first step toward that.
-- **GitHub's own secret scanning is not active.** It is free on public
-  repositories; this repository is private, which needs a paid add-on. So
-  the provider-notification and auto-revoke path does not apply here.
+- **GitHub's own secret scanning and push protection are not yet enabled.**
+  The repository was briefly private while this control was built, which put
+  them out of reach. It is public again, so both are now available free.
+  Push protection in particular closes the one gap this control cannot:
+  TruffleHog in CI fires only AFTER a push, by which point a secret pushed
+  to a public repository is already exposed. Push protection rejects the
+  push itself. Not enabled yet - see open items.
 
 ## Measurements
 
@@ -100,4 +104,6 @@ the TruffleHog image is the obvious lever, not weakening the gate.
   `trufflehog:ignore`, which has no owner, reason or expiry — that
   contradicts the time-boxed exception model in the governance layer.
   Phase 4 should reconcile these.
-- `0001-baseline.md` records the repository as public. It is private.
+- Enable GitHub push protection (Settings -> Advanced Security). It is the
+  only control here that prevents rather than detects, and it is free on a
+  public repository. Deserves its own ADR.
